@@ -38,3 +38,18 @@ pub fn calculate_txns_root(txns: &[Transaction]) -> [u8; 32] {
     sha3.finalize(&mut output);
     output
 }
+
+pub fn load_blocks(start: u64, length: u64) -> Option<Vec<Block>> {
+    let db = sled::open("block_db").ok()?;
+    let mut blocks = vec![];
+    for i in start..start + length {
+        if let Ok(Some(data)) = db.get(format!("block_{}", i)) {
+            if let Ok(block) = serde_json::from_slice::<Block>(&data) {
+                blocks.push(block);
+            }
+        } else {
+            return None;
+        }
+    }
+    Some(blocks)
+}
