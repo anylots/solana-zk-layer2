@@ -1,0 +1,14 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+solana-sdk.workspace = true
+solana-client.workspace = true
+anchor-lang.workspace = true
+anyhow.workspace = true
+log.workspace = true
+env_logger.workspace = true
+base64 = "0.21"

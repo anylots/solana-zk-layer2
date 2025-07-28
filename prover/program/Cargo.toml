@@ -1,0 +1,11 @@
+[package]
+name = "program"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+sp1-zkvm = { workspace = true }
+solana-sdk.workspace = true
+log.workspace = true
+tiny-keccak.workspace = true
+share = { path = "../../share" }

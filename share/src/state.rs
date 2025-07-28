@@ -1,0 +1,165 @@
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use tiny_keccak::{Hasher, Sha3};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct State {
+    pub balances: HashMap<String, u128>, // address -> balance
+}
+
+impl State {
+    pub fn new() -> Self {
+        Self {
+            balances: HashMap::new(),
+        }
+    }
+    pub fn get_balance(&self, address: &str) -> u128 {
+        *self.balances.get(address).unwrap_or(&0)
+    }
+
+    pub fn set_balance(&mut self, address: String, balance: u128) {
+        self.balances.insert(address, balance);
+    }
+
+    pub fn add_balance(&mut self, address: String, amount: u128) {
+        let current_balance = self.get_balance(&address);
+        let new_balance = current_balance.saturating_add(amount);
+        self.set_balance(address, new_balance);
+    }
+
+    pub fn sub_balance(&mut self, address: String, amount: u128) -> bool {
+        let current_balance = self.get_balance(&address);
+        if current_balance >= amount {
+            let new_balance = current_balance - amount;
+            self.set_balance(address, new_balance);
+            true
+        } else {
+            false
+        }
+    }
+}
+
+pub struct StateDB {
+    pub db: sled::Db,
+    pub cache: HashMap<String, u128>,
+    pub state: State,
+}
+
+impl StateDB {
+    pub fn new(db_path: &str) -> Self {
+        let db = sled::open(db_path).unwrap();
+        StateDB {
+            db,
+            cache: HashMap::new(),
+            state: State::new(),
+        }
+    }
+
+    pub fn save(&self) {
+        let serialized = serde_json::to_vec(&self.state.balances).unwrap();
+        self.db.insert("balance_state", serialized).unwrap();
+    }
+
+    pub fn load(&mut self) {
+        if let Ok(Some(data)) = self.db.get("balance_state") {
+            if let Ok(user_balances) = serde_json::from_slice::<HashMap<String, u128>>(&data) {
+                self.state.balances = user_balances;
+            }
+        }
+    }
+
+}
+impl State {
+    //  State root of binary tree
+    pub fn calculate_state_root(&self) -> Option<[u8; 32]> {
+        if self.balances.is_empty() {
+            return None;
+        }
+
+        // Calculate hash for each user's state
+        let mut leaf_hashes: Vec<[u8; 32]> = self
+            .balances
+            .iter()
+            .map(|(user_id, value)| calculate_user_hash(user_id, &value))
+            .collect();
+
+        // Sorting
+        if leaf_hashes.len() % 2 == 1 {
+            leaf_hashes.push(leaf_hashes[leaf_hashes.len() - 1]);
+        }
+
+        // Build binary tree bottom-up
+        let mut nodes: Vec<MerkleNode> =
+            leaf_hashes.into_iter().map(MerkleNode::new_leaf).collect();
+
+        // Build tree level by level until we have one root node
+        while nodes.len() > 1 {
+            let mut next_level = Vec::new();
+
+            for i in (0..nodes.len()).step_by(2) {
+                let left = nodes[i].clone();
+                let right = if i + 1 < nodes.len() {
+                    nodes[i + 1].clone()
+                } else {
+                    left.clone()
+                };
+
+                next_level.push(MerkleNode::new_internal(left, right));
+            }
+
+            nodes = next_level;
+        }
+
+        if let Some(root) = nodes.into_iter().next() {
+            Some(root.hash)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MerkleNode {
+    pub hash: [u8; 32],
+    pub left: Option<Box<MerkleNode>>,
+    pub right: Option<Box<MerkleNode>>,
+}
+
+impl MerkleNode {
+    fn new_leaf(hash: [u8; 32]) -> Self {
+        MerkleNode {
+            hash,
+            left: None,
+            right: None,
+        }
+    }
+
+    fn new_internal(left: MerkleNode, right: MerkleNode) -> Self {
+        let mut sha3 = Sha3::v256();
+        let mut output = [0u8; 32];
+
+        sha3.update(&left.hash);
+        sha3.update(&right.hash);
+        sha3.finalize(&mut output);
+
+        MerkleNode {
+            hash: output,
+            left: Some(Box::new(left)),
+            right: Some(Box::new(right)),
+        }
+    }
+}
+
+// Calculate hash for a account's state
+fn calculate_user_hash(address: &str, balance: &u128) -> [u8; 32] {
+    let mut sha3 = Sha3::v256();
+    let mut output = [0u8; 32];
+
+    // Hash user address
+    sha3.update(address.as_bytes());
+    // Hash user balance
+    sha3.update(&balance.to_be_bytes());
+
+    sha3.finalize(&mut output);
+    output
+}
