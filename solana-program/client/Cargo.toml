@@ -1,8 +1,15 @@
 [package]
-name = "client"
+name = "l2-state-client"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "l2_state_client"
+path = "src/lib.rs"
+
+[[bin]]
+name = "main"
+path = "src/main.rs"
 
 [dependencies]
 solana-sdk.workspace = true

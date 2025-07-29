@@ -1,30 +1,32 @@
 use anyhow::Result;
-use share::transaction::{calculate_txns_root, Block};
+use share::transaction::{calculate_txns_root, Block, BlockDB};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
+use crate::batcher::tx_batcher::TxBatcher;
 use crate::executor::{Executor, STATE};
 
 static BLOCK_TIME_INTERVAL: Duration = Duration::from_millis(200);
 
 // For generate block and execute txn.
 pub struct Node {
-    pub block_db: sled::Db,
     pub executor: Executor,
+    pub batcher: Arc<TxBatcher>,
     pub latest_block_num: u64,
     pub latest_state_root: [u8; 32],
     pub last_block_time: Arc<RwLock<Instant>>,
 }
 
 impl Node {
-    pub fn new(db_path: Option<String>) -> Result<Self> {
-        let block_db = sled::open(db_path.unwrap_or("block_db".to_owned()))?;
+    pub async fn new() -> Result<Self> {
+        let block_db = BLOCK_DB.read().await;
         let executor = Executor::new();
+        let batcher = TxBatcher::new()?;
 
         // Initialize block number from database or start from 0
-        let latest_block_num = match block_db.get("latest_block_num")? {
+        let latest_block_num = match block_db.db.get("latest_block_num")? {
             Some(bytes) => {
                 let num_bytes: [u8; 8] = bytes
                     .as_ref()
@@ -35,7 +37,7 @@ impl Node {
             None => 0,
         };
 
-        let latest_state_root = match block_db.get("latest_state_root")? {
+        let latest_state_root = match block_db.db.get("latest_state_root")? {
             Some(bytes) => {
                 let num_bytes: [u8; 32] = bytes
                     .as_ref()
@@ -47,8 +49,8 @@ impl Node {
         };
 
         Ok(Self {
-            block_db,
             executor,
+            batcher: Arc::new(batcher),
             latest_block_num,
             latest_state_root,
             last_block_time: Arc::new(RwLock::new(Instant::now())),
@@ -56,6 +58,16 @@ impl Node {
     }
 
     pub async fn start(&mut self) -> Result<()> {
+        // Step1. Start batcher
+        let batcher = self.batcher.clone();
+        tokio::spawn(async move {
+            loop {
+                sleep(Duration::from_secs(60)).await;
+                let _ = batcher.smart_submit().await;
+            }
+        });
+
+        // Step2. Start building block
         loop {
             let should_generate_block = {
                 let last_time = *self.last_block_time.read().await;
@@ -106,23 +118,32 @@ impl Node {
         let block_data = serde_json::to_vec(block)
             .map_err(|e| anyhow::anyhow!("Failed to serialize block: {}", e))?;
 
+        let block_db = BLOCK_DB.write().await;
+
         // Save block
         let block_key = format!("block_{}", block.block_num);
-        self.block_db.insert(block_key.as_bytes(), block_data)?;
+        block_db.db.insert(block_key.as_bytes(), block_data)?;
 
         // Update latest_block_num & latest_state_root
         let block_num_bytes = block.block_num.to_be_bytes();
-        self.block_db
+        block_db
+            .db
             .insert("latest_block_num", &block_num_bytes[..])?;
-        self.block_db
+        block_db
+            .db
             .insert("latest_state_root", &block.post_state_root.unwrap())?;
 
         // Save balance state
         state_db.save();
 
         // Flush to ensure data is persisted
-        self.block_db.flush()?;
+        block_db.db.flush()?;
 
         Ok(())
     }
+}
+
+// Global block db instance
+lazy_static::lazy_static! {
+    pub static ref BLOCK_DB: Arc<RwLock<BlockDB>> = Arc::new(RwLock::new(BlockDB::new("block_db")));
 }

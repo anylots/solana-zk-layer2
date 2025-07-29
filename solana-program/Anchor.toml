@@ -5,7 +5,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-l2-state = "C5bPpisqFtj8oCUd6MFi648pZhpXXVLm1qmvtj21iS3Y"
+l2-state = "9RrUP9zNimDPVeoP47zJAAMnWahf7geUuWgcv3XMCzGq"
 
 [registry]
 url = "https://api.apr.dev"

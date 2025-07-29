@@ -53,3 +53,14 @@ pub fn load_blocks(start: u64, length: u64) -> Option<Vec<Block>> {
     }
     Some(blocks)
 }
+
+pub struct BlockDB {
+    pub db: sled::Db,
+}
+
+impl BlockDB {
+    pub fn new(db_path: &str) -> Self {
+        let block_db = sled::open(db_path).unwrap();
+        Self { db: block_db }
+    }
+}

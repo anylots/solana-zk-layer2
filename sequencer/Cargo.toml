@@ -19,3 +19,4 @@ eyre.workspace = true
 bincode.workspace = true
 sled.workspace = true
 share = { path = "../share" }
+l2-state-client = { path = "../solana-program/client" }

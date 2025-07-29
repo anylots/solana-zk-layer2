@@ -4,8 +4,8 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::hash::hash;
 
 mod error;
-mod verifier;
 mod state;
+mod verifier;
 
 declare_id!("9RrUP9zNimDPVeoP47zJAAMnWahf7geUuWgcv3XMCzGq");
 
@@ -20,12 +20,12 @@ pub mod l2_state {
         let batch_storage = &mut ctx.accounts.batch_storage;
         batch_storage.authority = ctx.accounts.authority.key();
         batch_storage.batches = Vec::new();
-        
-        let latest_batch_index = &mut ctx.accounts.latest_batch_index;
-        latest_batch_index.authority = ctx.accounts.authority.key();
-        latest_batch_index.latest_index = 0;
-        
-        msg!("Batch storage and latest batch index initialized");
+
+        let last_finalized = &mut ctx.accounts.last_finalized;
+        last_finalized.authority = ctx.accounts.authority.key();
+        last_finalized.batch_index = 0;
+
+        msg!("Batch storage and last_finalized batch index initialized");
         Ok(())
     }
 
@@ -39,6 +39,8 @@ pub mod l2_state {
         // Create BatchData to store
         let batch_data = BatchData {
             batch_index: batch_info.batch_index,
+            start_block_num: batch_info.start_block_num,
+            end_block_num: batch_info.end_block_num,
             batch_hash,
             prev_state_root: batch_info.prev_state_root,
             post_state_root: batch_info.post_state_root,
@@ -55,12 +57,6 @@ pub mod l2_state {
             *existing_batch = batch_data;
         } else {
             batch_storage.batches.push(batch_data);
-        }
-
-        // Update latest batch index
-        let latest_batch_index = &mut ctx.accounts.latest_batch_index;
-        if batch_info.batch_index > latest_batch_index.latest_index {
-            latest_batch_index.latest_index = batch_info.batch_index;
         }
 
         msg!(
@@ -95,6 +91,11 @@ pub mod l2_state {
         };
 
         prove_batch(groth16_proof)?;
+
+        // Update last_finalized_batch_index
+        let last_finalized = &mut ctx.accounts.last_finalized;
+        last_finalized.batch_index = batch_index;
+
         Ok(())
     }
 
@@ -110,9 +111,20 @@ pub mod l2_state {
         }
     }
 
-    pub fn get_latest_batch_index(ctx: Context<GetLatestBatchIndex>) -> Result<u64> {
-        let latest_batch_index = &ctx.accounts.latest_batch_index;
-        Ok(latest_batch_index.latest_index)
+    pub fn get_latest_batch(ctx: Context<GetCommittedBatch>) -> Result<Option<BatchData>> {
+        let storage = &ctx.accounts.batch_storage.batches;
+        if let Some(batch) = storage.last() {
+            return Ok(Some(batch.clone()));
+        } else {
+            return Ok(None);
+        }
+    }
+
+    pub fn get_last_finalized_batch_index(
+        ctx: Context<GetLatestFinalizedBatchIndex>,
+    ) -> Result<u64> {
+        let last_finalized = &ctx.accounts.last_finalized;
+        Ok(last_finalized.batch_index)
     }
 }
 
@@ -127,7 +139,10 @@ pub fn hash_nested_vector(data: &Vec<Vec<u8>>) -> [u8; 32] {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct BatchInfo {
     pub batch_index: u64,
+    // Only saved in calldata
     pub blocks: Vec<Vec<u8>>,
+    pub start_block_num: u64,
+    pub end_block_num: u64,
     pub prev_state_root: [u8; 32],
     pub post_state_root: [u8; 32],
 }
@@ -135,6 +150,8 @@ pub struct BatchInfo {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct BatchData {
     pub batch_index: u64,
+    pub start_block_num: u64,
+    pub end_block_num: u64,
     pub batch_hash: [u8; 32],
     pub prev_state_root: [u8; 32],
     pub post_state_root: [u8; 32],
@@ -151,12 +168,12 @@ impl Space for BatchStorage {
 }
 
 #[account]
-pub struct LatestBatchIndex {
+pub struct LastFinalizedBatchIndex {
     pub authority: Pubkey,
-    pub latest_index: u64,
+    pub batch_index: u64,
 }
 
-impl Space for LatestBatchIndex {
+impl Space for LastFinalizedBatchIndex {
     const INIT_SPACE: usize = 32 + 8; // authority + u64
 }
 
@@ -173,11 +190,11 @@ pub struct Initialize<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + LatestBatchIndex::INIT_SPACE,
-        seeds = [b"latest_batch_index"],
+        space = 8 + LastFinalizedBatchIndex::INIT_SPACE,
+        seeds = [b"last_finalized_batch_index"],
         bump
     )]
-    pub latest_batch_index: Account<'info, LatestBatchIndex>,
+    pub last_finalized: Account<'info, LastFinalizedBatchIndex>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -191,18 +208,11 @@ pub struct CommitBatch<'info> {
         seeds = [b"batch_storage"],
         bump,
         has_one = authority,
-        realloc = 8 + 32 + 4 + batch_storage.batches.len().saturating_add(1).saturating_mul(104),
+        realloc = 8 + 32 + 4 + batch_storage.batches.len().saturating_add(1).saturating_mul(120),
         realloc::payer = authority,
         realloc::zero = false,
     )]
     pub batch_storage: Account<'info, BatchStorage>,
-    #[account(
-        mut,
-        seeds = [b"latest_batch_index"],
-        bump,
-        has_one = authority,
-    )]
-    pub latest_batch_index: Account<'info, LatestBatchIndex>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -230,13 +240,18 @@ pub struct ProveState<'info> {
         bump,
     )]
     pub batch_storage: Account<'info, BatchStorage>,
+    #[account(
+        seeds = [b"last_finalized_batch_index"],
+        bump,
+    )]
+    pub last_finalized: Account<'info, LastFinalizedBatchIndex>,
 }
 
 #[derive(Accounts)]
-pub struct GetLatestBatchIndex<'info> {
+pub struct GetLatestFinalizedBatchIndex<'info> {
     #[account(
-        seeds = [b"latest_batch_index"],
+        seeds = [b"last_finalized_batch_index"],
         bump,
     )]
-    pub latest_batch_index: Account<'info, LatestBatchIndex>,
+    pub last_finalized: Account<'info, LastFinalizedBatchIndex>,
 }

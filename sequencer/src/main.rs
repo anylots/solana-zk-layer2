@@ -14,7 +14,7 @@ async fn main() {
     info!("Starting solana layer2 sequencer...");
 
     // Step2. Start sequencer node
-    let mut sequencer_node = Node::new(None).expect("Init sequencer node failed");
+    let mut sequencer_node = Node::new().await.expect("Init sequencer node failed");
     tokio::spawn(async move { sequencer_node.start().await });
 
     // Step3. Start rpc server

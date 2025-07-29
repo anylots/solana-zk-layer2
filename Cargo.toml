@@ -1,6 +1,6 @@
 [workspace]
-members = ["sequencer", "share", "prover/program", "prover/host"]
-exclude = ["solana-program/programs", "solana-program/client"]
+members = ["sequencer", "share", "prover/program", "prover/host", "solana-program/client"]
+exclude = ["solana-program/programs"]
 resolver = "2"
 
 [workspace.package]

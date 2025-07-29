@@ -904,19 +904,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "client"
-version = "0.1.0"
-dependencies = [
- "anchor-lang",
- "anyhow",
- "base64 0.21.7",
- "env_logger",
- "log",
- "solana-client",
- "solana-sdk",
-]
-
-[[package]]
 name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2202,6 +2189,19 @@ dependencies = [
  "anchor-lang",
  "borsh 1.5.7",
  "sp1-solana",
+]
+
+[[package]]
+name = "l2-state-client"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anyhow",
+ "base64 0.21.7",
+ "env_logger",
+ "log",
+ "solana-client",
+ "solana-sdk",
 ]
 
 [[package]]
