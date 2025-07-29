@@ -5,8 +5,9 @@ use anchor_lang::solana_program::hash::hash;
 
 mod error;
 mod verifier;
+mod state;
 
-declare_id!("C5bPpisqFtj8oCUd6MFi648pZhpXXVLm1qmvtj21iS3Y");
+declare_id!("9RrUP9zNimDPVeoP47zJAAMnWahf7geUuWgcv3XMCzGq");
 
 #[program]
 pub mod l2_state {
@@ -15,11 +16,16 @@ pub mod l2_state {
     use super::*;
 
     // Init storage pda.
-    pub fn initialize(ctx: Context<InitializeBatchStorage>) -> Result<()> {
+    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let batch_storage = &mut ctx.accounts.batch_storage;
         batch_storage.authority = ctx.accounts.authority.key();
         batch_storage.batches = Vec::new();
-        msg!("Batch storage initialized");
+        
+        let latest_batch_index = &mut ctx.accounts.latest_batch_index;
+        latest_batch_index.authority = ctx.accounts.authority.key();
+        latest_batch_index.latest_index = 0;
+        
+        msg!("Batch storage and latest batch index initialized");
         Ok(())
     }
 
@@ -49,6 +55,12 @@ pub mod l2_state {
             *existing_batch = batch_data;
         } else {
             batch_storage.batches.push(batch_data);
+        }
+
+        // Update latest batch index
+        let latest_batch_index = &mut ctx.accounts.latest_batch_index;
+        if batch_info.batch_index > latest_batch_index.latest_index {
+            latest_batch_index.latest_index = batch_info.batch_index;
         }
 
         msg!(
@@ -97,6 +109,11 @@ pub mod l2_state {
             return Ok(None);
         }
     }
+
+    pub fn get_latest_batch_index(ctx: Context<GetLatestBatchIndex>) -> Result<u64> {
+        let latest_batch_index = &ctx.accounts.latest_batch_index;
+        Ok(latest_batch_index.latest_index)
+    }
 }
 
 pub fn hash_nested_vector(data: &Vec<Vec<u8>>) -> [u8; 32] {
@@ -133,8 +150,18 @@ impl Space for BatchStorage {
     const INIT_SPACE: usize = 32 + 4 + 0; // authority + vec length + initial empty vec
 }
 
+#[account]
+pub struct LatestBatchIndex {
+    pub authority: Pubkey,
+    pub latest_index: u64,
+}
+
+impl Space for LatestBatchIndex {
+    const INIT_SPACE: usize = 32 + 8; // authority + u64
+}
+
 #[derive(Accounts)]
-pub struct InitializeBatchStorage<'info> {
+pub struct Initialize<'info> {
     #[account(
         init,
         payer = authority,
@@ -143,6 +170,14 @@ pub struct InitializeBatchStorage<'info> {
         bump
     )]
     pub batch_storage: Account<'info, BatchStorage>,
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + LatestBatchIndex::INIT_SPACE,
+        seeds = [b"latest_batch_index"],
+        bump
+    )]
+    pub latest_batch_index: Account<'info, LatestBatchIndex>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -161,6 +196,13 @@ pub struct CommitBatch<'info> {
         realloc::zero = false,
     )]
     pub batch_storage: Account<'info, BatchStorage>,
+    #[account(
+        mut,
+        seeds = [b"latest_batch_index"],
+        bump,
+        has_one = authority,
+    )]
+    pub latest_batch_index: Account<'info, LatestBatchIndex>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -188,4 +230,13 @@ pub struct ProveState<'info> {
         bump,
     )]
     pub batch_storage: Account<'info, BatchStorage>,
+}
+
+#[derive(Accounts)]
+pub struct GetLatestBatchIndex<'info> {
+    #[account(
+        seeds = [b"latest_batch_index"],
+        bump,
+    )]
+    pub latest_batch_index: Account<'info, LatestBatchIndex>,
 }

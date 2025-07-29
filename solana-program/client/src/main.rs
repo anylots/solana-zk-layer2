@@ -9,7 +9,7 @@ use solana_sdk::{
 };
 
 // Program ID from the Anchor.toml
-const PROGRAM_ID: &str = "C5bPpisqFtj8oCUd6MFi648pZhpXXVLm1qmvtj21iS3Y";
+const PROGRAM_ID: &str = "9RrUP9zNimDPVeoP47zJAAMnWahf7geUuWgcv3XMCzGq";
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct BatchInfo {
@@ -58,6 +58,10 @@ fn call_commit_batch(client: &RpcClient, fee_payer: &Keypair, program_id: &Pubke
         accounts: vec![
             AccountMeta::new(
                 Pubkey::find_program_address(&[b"batch_storage"], program_id).0,
+                false,
+            ),
+            AccountMeta::new(
+                Pubkey::find_program_address(&[b"latest_batch_index"], program_id).0,
                 false,
             ),
             AccountMeta::new(fee_payer.pubkey(), true), // authority must be mutable for realloc
@@ -164,6 +168,69 @@ fn call_get_committed_batch(
     Ok(())
 }
 
+fn call_get_latest_batch_index(
+    client: &RpcClient,
+    fee_payer: &Keypair,
+    program_id: &Pubkey,
+) -> Result<()> {
+    let discriminator: [u8; 8] = [120, 80, 174, 134, 214, 40, 56, 37];
+    let instruction_data = discriminator.to_vec();
+    
+    // Create the instruction
+    let instruction = Instruction {
+        program_id: *program_id,
+        accounts: vec![AccountMeta::new_readonly(
+            Pubkey::find_program_address(&[b"latest_batch_index"], program_id).0,
+            false,
+        )],
+        data: instruction_data,
+    };
+
+    // Get recent blockhash
+    let recent_blockhash = client.get_latest_blockhash()?;
+
+    let transaction = Transaction::new_signed_with_payer(
+        &[instruction],
+        Some(&fee_payer.pubkey()),
+        &[fee_payer],
+        recent_blockhash,
+    );
+
+    // Send the transaction
+    let result = client.simulate_transaction(&transaction)?;
+
+    if let Some(err) = result.value.err {
+        println!("Transaction simulation failed: {:?}", err);
+        return Ok(());
+    }
+    println!("Get latest batch index transaction result: {:?}", result);
+
+    // Extract return value from the simulation result
+    if let Some(return_data) = &result.value.return_data {
+        let (data, _encoding) = &return_data.data;
+        // The return data is base64 encoded, decode it
+        if let Ok(decoded_data) = general_purpose::STANDARD.decode(data) {
+            // Deserialize to u64
+            match u64::try_from_slice(&decoded_data) {
+                Ok(latest_index) => {
+                    println!("Successfully retrieved latest batch index: {}", latest_index);
+                }
+                Err(e) => {
+                    println!("Failed to deserialize latest batch index: {:?}", e);
+                    println!("Raw decoded data length: {}", decoded_data.len());
+                    println!("Raw decoded data: {:?}", decoded_data);
+                }
+            }
+        } else {
+            println!("Failed to decode return data from base64");
+        }
+    } else {
+        println!("No return data in simulation result");
+    }
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     // Create connection to local validator
     let client = RpcClient::new_with_commitment(
@@ -205,6 +272,10 @@ fn main() -> Result<()> {
     println!("------------> Start call the get_batch function");
     call_get_committed_batch(&client, &fee_payer, &program_id)?;
 
+    // Call the get_latest_batch_index function
+    println!("------------> Start call the get_latest_batch_index function");
+    call_get_latest_batch_index(&client, &fee_payer, &program_id)?;
+
     Ok(())
 }
 
@@ -216,6 +287,10 @@ pub fn initialize(client: &RpcClient, fee_payer: &Keypair, program_id: &Pubkey) 
         accounts: vec![
             AccountMeta::new(
                 Pubkey::find_program_address(&[b"batch_storage"], program_id).0,
+                false,
+            ),
+            AccountMeta::new(
+                Pubkey::find_program_address(&[b"latest_batch_index"], program_id).0,
                 false,
             ),
             AccountMeta::new(fee_payer.pubkey(), true),
@@ -235,7 +310,7 @@ pub fn initialize(client: &RpcClient, fee_payer: &Keypair, program_id: &Pubkey) 
     // Send the transaction
     let signature = client.send_and_confirm_transaction(&transaction)?;
     println!(
-        "initialize_batch_storage Transaction signature: {}",
+        "initialize Transaction signature: {}",
         signature
     );
 
