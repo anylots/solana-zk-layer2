@@ -1,7 +1,10 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 use sha2::{Digest, Sha256};
-use share::{transaction::calculate_txns_root, zkvm::ZkVMInput};
+use share::{
+    transaction::{calculate_txns_root, parsing_instruction},
+    zkvm::ZkVMInput,
+};
 
 pub fn main() {
     // Read the input.
@@ -28,8 +31,21 @@ pub fn main() {
             "txns_root == block.txns_root"
         );
 
-        for _txn in block.txns {
-            state.add_balance("user1".to_owned(), 100);
+        for txn in block.txns {
+            for (_, instruction) in txn.message.instructions.iter().enumerate() {
+                let op = parsing_instruction(&instruction, &txn)
+                    .unwrap()
+                    .expect("valid instruction");
+                let from = op.from;
+                let to = op.to;
+                let amount = op.amount;
+                // check sender's amount
+                let from_balance = state.get_balance(&from);
+                assert!(from_balance >= amount, "Insufficient balance for transfer");
+                // change the balance
+                state.sub_balance(from, amount);
+                state.add_balance(to, amount);
+            }
         }
         // Calculate current block state root
         let state_root = state.calculate_state_root().unwrap_or_default();

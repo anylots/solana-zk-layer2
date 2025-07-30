@@ -1,7 +1,77 @@
+use anyhow::{anyhow, Result};
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
-use solana_sdk::transaction::Transaction;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
+use solana_sdk::{system_instruction::SystemInstruction, transaction::Transaction};
 
+pub struct TransferOp {
+    pub from: String,
+    pub to: String,
+    pub amount: u128,
+}
+
+pub fn parsing_instruction(
+    instruction: &solana_sdk::instruction::CompiledInstruction,
+    txn: &Transaction,
+) -> Result<Option<TransferOp>> {
+    let program_id_index = instruction.program_id_index as usize;
+
+    if program_id_index >= txn.message.account_keys.len() {
+        return Err(anyhow!("Invalid program_id_index"));
+    }
+
+    let program_id = &txn.message.account_keys[program_id_index];
+
+    // parsing system program instructions
+    if program_id == &solana_sdk::system_program::ID {
+        parsing_sys_instruction(instruction, txn)?;
+    } else {
+        // for other instructions, only basic logging is done
+        info!("Processing instruction for program: {}", program_id);
+    }
+
+    Ok(None)
+}
+
+fn parsing_sys_instruction(
+    instruction: &solana_sdk::instruction::CompiledInstruction,
+    txn: &Transaction,
+) -> Result<Option<TransferOp>> {
+    if instruction.data.is_empty() {
+        return Ok(None);
+    }
+
+    // transfer Instructions
+    match bincode::deserialize::<SystemInstruction>(&instruction.data) {
+        Ok(SystemInstruction::Transfer { lamports }) => {
+            // transfer ins
+            if instruction.accounts.len() >= 2 {
+                let from_index = instruction.accounts[0] as usize;
+                let to_index = instruction.accounts[1] as usize;
+
+                if from_index < txn.message.account_keys.len()
+                    && to_index < txn.message.account_keys.len()
+                {
+                    let from_pubkey = txn.message.account_keys[from_index].to_string();
+                    let to_pubkey = txn.message.account_keys[to_index].to_string();
+
+                    return Ok(Some(TransferOp {
+                        from: from_pubkey,
+                        to: to_pubkey,
+                        amount: lamports as u128,
+                    }));
+                }
+            }
+        }
+        Ok(_) => {
+            info!("Non-transfer system instruction");
+        }
+        Err(e) => {
+            warn!("Failed to deserialize system instruction: {}", e);
+        }
+    }
+    Ok(None)
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Block {
     pub block_num: u64,
