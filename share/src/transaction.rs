@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use solana_sdk::transaction::Transaction;
-use tiny_keccak::{Hasher, Sha3};
+use sha2::{Sha256, Digest};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Block {
@@ -25,18 +25,16 @@ impl Block {
 
 /// Calculate txns root for the block
 pub fn calculate_txns_root(txns: &[Transaction]) -> [u8; 32] {
-    let mut sha3 = Sha3::v256();
-    let mut output = [0u8; 32];
+    let mut hasher = Sha256::new();
 
     // Hash all transactions in the block
     for txn in txns {
         if let Ok(txn_data) = serde_json::to_vec(txn) {
-            sha3.update(&txn_data);
+            hasher.update(&txn_data);
         }
     }
 
-    sha3.finalize(&mut output);
-    output
+    hasher.finalize().into()
 }
 
 pub fn load_blocks(start: u64, length: u64) -> Option<Vec<Block>> {

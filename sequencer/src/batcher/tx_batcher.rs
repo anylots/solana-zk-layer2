@@ -1,8 +1,10 @@
+use std::vec;
+
 use crate::node::BLOCK_DB;
 use anyhow::Result;
 use l2_state_client::{BatchInfo, L2StateClient};
 use log::info;
-use share::transaction::{load_blocks, Block};
+use share::transaction::{Block, BlockDB};
 
 static MAX_BLOCK_COUNT_IN_BATCH: u64 = 256;
 
@@ -64,7 +66,7 @@ impl TxBatcher {
 
         // Determine which blocks to include in the next batch
         let blocks_to_submit = self
-            .collect_blocks_for_batch(next_batch.start_block_num, latest_block_num)
+            .collect_blocks_for_batch(&block_db, next_batch.start_block_num, latest_block_num)
             .await?;
 
         if blocks_to_submit.is_empty() {
@@ -95,6 +97,7 @@ impl TxBatcher {
     /// Collect blocks from the database for batching
     async fn collect_blocks_for_batch(
         &self,
+        block_db: &BlockDB,
         start_block_num: u64,
         latest_block_num_local: u64,
     ) -> Result<Vec<Block>> {
@@ -104,7 +107,17 @@ impl TxBatcher {
             latest_block_num_local - start_block_num
         };
 
-        let blocks = load_blocks(start_block_num, blocks_count);
-        Ok(blocks.unwrap_or_default())
+        let mut blocks = vec![];
+        for i in start_block_num..start_block_num + blocks_count {
+            if let Ok(Some(data)) = block_db.db.get(format!("block_{}", i)) {
+                if let Ok(block) = serde_json::from_slice::<Block>(&data) {
+                    blocks.push(block);
+                }
+            } else {
+                return Ok(vec![]);
+            }
+        }
+
+        Ok(blocks)
     }
 }

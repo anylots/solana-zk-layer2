@@ -41,10 +41,10 @@ pub async fn start() {
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    info!("Starting Solana mock node server on 0.0.0.0:3000");
+    info!("Starting node rpc server on 0.0.0.0:8898");
 
     // Step3. start server
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8898").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 

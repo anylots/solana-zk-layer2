@@ -62,5 +62,13 @@ pub fn prove(state: State, blocks: Vec<Block>) -> Result<Option<Vec<u8>>, anyhow
     let pi_bytes = proof.public_values.read::<[u8; 32]>();
     log::info!("pi_hash generated with sp1-vm prove: {}", pi_bytes.len());
 
-    Ok(Some(vec![]))
+    Ok(Some(
+        proof
+            .proof
+            .try_as_groth_16()
+            .unwrap_or_default()
+            .encoded_proof
+            .as_bytes()
+            .to_vec(),
+    ))
 }

@@ -2665,12 +2665,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "env_logger",
+ "l2-state-client",
  "log",
  "serde",
  "serde_json",
  "share",
- "sled",
  "sp1-sdk",
+ "tokio",
 ]
 
 [[package]]
@@ -4479,10 +4480,12 @@ name = "program"
 version = "0.1.0"
 dependencies = [
  "log",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
  "share",
  "solana-sdk",
  "sp1-zkvm",
- "tiny-keccak",
 ]
 
 [[package]]
@@ -5355,6 +5358,7 @@ dependencies = [
  "rand 0.9.2",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "share",
  "sled",
  "solana-sdk",
@@ -5552,9 +5556,9 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sled",
  "solana-sdk",
- "tiny-keccak",
 ]
 
 [[package]]

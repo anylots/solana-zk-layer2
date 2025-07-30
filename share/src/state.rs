@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tiny_keccak::{Hasher, Sha3};
+use sha2::{Sha256, Digest};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct State {
@@ -135,15 +135,13 @@ impl MerkleNode {
     }
 
     fn new_internal(left: MerkleNode, right: MerkleNode) -> Self {
-        let mut sha3 = Sha3::v256();
-        let mut output = [0u8; 32];
+        let mut hasher = Sha256::new();
 
-        sha3.update(&left.hash);
-        sha3.update(&right.hash);
-        sha3.finalize(&mut output);
+        hasher.update(&left.hash);
+        hasher.update(&right.hash);
 
         MerkleNode {
-            hash: output,
+            hash: hasher.finalize().into(),
             left: Some(Box::new(left)),
             right: Some(Box::new(right)),
         }
@@ -152,14 +150,12 @@ impl MerkleNode {
 
 // Calculate hash for a account's state
 fn calculate_user_hash(address: &str, balance: &u128) -> [u8; 32] {
-    let mut sha3 = Sha3::v256();
-    let mut output = [0u8; 32];
+    let mut hasher = Sha256::new();
 
     // Hash user address
-    sha3.update(address.as_bytes());
+    hasher.update(address.as_bytes());
     // Hash user balance
-    sha3.update(&balance.to_be_bytes());
+    hasher.update(&balance.to_be_bytes());
 
-    sha3.finalize(&mut output);
-    output
+    hasher.finalize().into()
 }

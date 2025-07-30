@@ -1,7 +1,7 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
+use sha2::{Digest, Sha256};
 use share::{transaction::calculate_txns_root, zkvm::ZkVMInput};
-use tiny_keccak::{Hasher, Sha3};
 
 pub fn main() {
     // Read the input.
@@ -11,7 +11,7 @@ pub fn main() {
     let prev_state_root = blocks.first().unwrap().prev_state_root.unwrap_or_default();
     let post_state_root = blocks.last().unwrap().post_state_root.unwrap_or_default();
 
-    let mut txns_roots: Vec<[u8; 32]> = vec![];
+    let mut blocks_bytes: Vec<u8> = vec![];
     let mut current_state_root = prev_state_root;
     for block in blocks {
         assert!(
@@ -19,6 +19,7 @@ pub fn main() {
             "blocks[n-1].post_state_root == blocks[n].prev_state_root"
         );
         current_state_root = block.post_state_root.unwrap_or_default();
+        blocks_bytes.extend_from_slice(&serde_json::to_vec(&block).unwrap_or_default());
 
         // Calculate txns root
         let txns_root = calculate_txns_root(&block.txns);
@@ -26,7 +27,6 @@ pub fn main() {
             txns_root == block.txns_root.unwrap_or_default(),
             "txns_root == block.txns_root"
         );
-        txns_roots.push(txns_root);
 
         for _txn in block.txns {
             state.add_balance("user1".to_owned(), 100);
@@ -40,7 +40,7 @@ pub fn main() {
     }
 
     // Replace versioned_hash with all txn hashes
-    let da_hash = calculate_da_hash(&txns_roots);
+    let da_hash = calculate_da_hash(&blocks_bytes);
 
     // calculate pi hash
     let pi_hash = calculate_pi_hash(&prev_state_root, &post_state_root, &da_hash);
@@ -50,16 +50,10 @@ pub fn main() {
 }
 
 // Helper function to calculate hash with all blocks' txns for DA.
-fn calculate_da_hash(txns_roots: &Vec<[u8; 32]>) -> [u8; 32] {
-    let mut sha3 = Sha3::v256();
-    let mut output = [0u8; 32];
-
-    for txns_root in txns_roots {
-        sha3.update(txns_root);
-    }
-
-    sha3.finalize(&mut output);
-    output
+fn calculate_da_hash(blocks_bytes: &Vec<u8>) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(blocks_bytes);
+    hasher.finalize().into()
 }
 
 // Helper function to calculate public input for zk proof.
@@ -68,13 +62,11 @@ fn calculate_pi_hash(
     post_state_root: &[u8; 32],
     da_hash: &[u8; 32],
 ) -> [u8; 32] {
-    let mut sha3 = Sha3::v256();
-    let mut output = [0u8; 32];
+    let mut hasher = Sha256::new();
 
-    sha3.update(prev_state_root);
-    sha3.update(post_state_root);
-    sha3.update(da_hash);
+    hasher.update(prev_state_root);
+    hasher.update(post_state_root);
+    hasher.update(da_hash);
 
-    sha3.finalize(&mut output);
-    output
+    hasher.finalize().into()
 }

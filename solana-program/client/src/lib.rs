@@ -21,6 +21,12 @@ pub struct BatchInfo {
     pub post_state_root: [u8; 32],
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct BatchProof {
+    pub batch_index: u64,
+    pub proof: Vec<u8>,
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
 pub struct BatchData {
     pub batch_index: u64,
@@ -138,6 +144,50 @@ impl L2StateClient {
 
         let signature = self.client.send_and_confirm_transaction(&transaction)?;
         log::info!("Commit batch transaction signature: {}", signature);
+
+        Ok(())
+    }
+
+    /// Prove batch
+    pub fn prove_batch(&self, batch_proof: BatchProof) -> Result<()> {
+        let discriminator: [u8; 8] = [27, 234, 100, 224, 134, 31, 168, 142];
+
+        // Serialize the BatchInfo
+        let mut instruction_data = discriminator.to_vec();
+        instruction_data.extend_from_slice(&batch_proof.try_to_vec()?);
+
+        // Create the instruction
+        let instruction = Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new(
+                    Pubkey::find_program_address(&[b"batch_storage"], &self.program_id).0,
+                    false,
+                ),
+                AccountMeta::new(
+                    Pubkey::find_program_address(
+                        &[b"last_finalized_batch_index"],
+                        &self.program_id,
+                    )
+                    .0,
+                    false,
+                ),
+                AccountMeta::new(self.fee_payer.pubkey(), true),
+                AccountMeta::new_readonly(system_program::ID, false),
+            ],
+            data: instruction_data,
+        };
+
+        let recent_blockhash = self.client.get_latest_blockhash()?;
+        let transaction = Transaction::new_signed_with_payer(
+            &[instruction],
+            Some(&self.fee_payer.pubkey()),
+            &[&self.fee_payer],
+            recent_blockhash,
+        );
+
+        let signature = self.client.send_and_confirm_transaction(&transaction)?;
+        log::info!("Prove batch transaction signature: {}", signature);
 
         Ok(())
     }

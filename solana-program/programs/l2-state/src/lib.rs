@@ -4,7 +4,6 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::hash::hash;
 
 mod error;
-mod state;
 mod verifier;
 
 declare_id!("9RrUP9zNimDPVeoP47zJAAMnWahf7geUuWgcv3XMCzGq");
