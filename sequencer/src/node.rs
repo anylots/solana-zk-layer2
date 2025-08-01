@@ -63,7 +63,9 @@ impl Node {
         tokio::spawn(async move {
             loop {
                 sleep(Duration::from_secs(60)).await;
-                let _ = batcher.smart_submit().await;
+                if let Err(e) = batcher.smart_submit().await {
+                    log::info!("Batcher error: {:?}", e);
+                };
             }
         });
 
@@ -118,7 +120,13 @@ impl Node {
         let block_data = serde_json::to_vec(block)
             .map_err(|e| anyhow::anyhow!("Failed to serialize block: {}", e))?;
 
-        let block_db = BLOCK_DB.write().await;
+        let mut block_db = BLOCK_DB.write().await;
+
+        // Save cache
+        if block_db.cache.len() == 128 {
+            block_db.cache.pop_front();
+        }
+        block_db.cache.push_back(block.clone());
 
         // Save block
         let block_key = format!("block_{}", block.block_num);

@@ -11,11 +11,13 @@ impl TransactionValidator {
         Self {}
     }
 
-    pub async fn validate_transaction(transaction: &Transaction) -> Result<()> {
+    pub async fn validate_transaction(sign_check: bool, transaction: &Transaction) -> Result<()> {
         info!("Starting transaction validation");
 
-        // 1. check txn signatrue
-        Self::validate_signatures(transaction)?;
+        if sign_check {
+            // 1. check txn signatrue
+            Self::validate_signatures(transaction)?;
+        }
 
         // 2. check format of txn
         Self::validate_transaction_format(transaction)?;

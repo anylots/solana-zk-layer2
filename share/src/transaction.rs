@@ -1,9 +1,12 @@
+use std::collections::VecDeque;
+
 use anyhow::{anyhow, Result};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use solana_sdk::{system_instruction::SystemInstruction, transaction::Transaction};
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransferOp {
     pub from: String,
     pub to: String,
@@ -22,11 +25,10 @@ pub fn parsing_instruction(
 
     let program_id = &txn.message.account_keys[program_id_index];
 
-    // parsing system program instructions
+    // Only parsing system program instructions
     if program_id == &solana_sdk::system_program::ID {
-        parsing_sys_instruction(instruction, txn)?;
+        return parsing_sys_instruction(instruction, txn);
     } else {
-        // for other instructions, only basic logging is done
         info!("Processing instruction for program: {}", program_id);
     }
 
@@ -124,11 +126,28 @@ pub fn load_blocks(start: u64, length: u64) -> Option<Vec<Block>> {
 
 pub struct BlockDB {
     pub db: sled::Db,
+    pub cache: VecDeque<Block>,
 }
 
 impl BlockDB {
     pub fn new(db_path: &str) -> Self {
         let block_db = sled::open(db_path).unwrap();
-        Self { db: block_db }
+        Self {
+            db: block_db,
+            cache: VecDeque::with_capacity(128),
+        }
+    }
+    pub fn search_txn(&self, signature: &str) -> Option<Transaction> {
+        for block in self.cache.clone() {
+            for txn in block.txns {
+                // Get the first signature from the transaction
+                if let Some(txn_signature) = txn.signatures.first() {
+                    if txn_signature.to_string() == signature {
+                        return Some(txn);
+                    }
+                }
+            }
+        }
+        None
     }
 }
