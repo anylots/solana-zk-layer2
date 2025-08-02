@@ -1,256 +1,114 @@
 #![allow(unexpected_cfgs)]
 
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::hash::hash;
 
-mod error;
+mod biz_error;
+mod bridge;
+mod state;
+mod util;
 mod verifier;
+
+use crate::bridge::*;
+use crate::state::*;
+use crate::verifier::*;
 
 declare_id!("9RrUP9zNimDPVeoP47zJAAMnWahf7geUuWgcv3XMCzGq");
 
+/*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+/*                    L2 STATE MAIN ENTRANCE                  */
+/*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
 #[program]
 pub mod l2_state {
-    use crate::verifier::{prove_batch, Groth16Proof};
-
     use super::*;
 
-    // Init storage pda.
+    /// Initialize program for l2 state.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    ///
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        let batch_storage = &mut ctx.accounts.batch_storage;
-        batch_storage.authority = ctx.accounts.authority.key();
-        batch_storage.batches = Vec::new();
-
-        let last_finalized = &mut ctx.accounts.last_finalized;
-        last_finalized.authority = ctx.accounts.authority.key();
-        last_finalized.batch_index = 0;
-
-        msg!("Batch storage and last_finalized batch index initialized");
-        Ok(())
+        state::initialize(ctx)
     }
 
-    // Commit batch, use solana network as DA.
+    /// Commit batch, use solana network as DA.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    /// * `batch_info` - The batch information to commit
+    ///
     pub fn commit_batch(ctx: Context<CommitBatch>, batch_info: BatchInfo) -> Result<[u8; 32]> {
-        msg!("Committing batch number: {}", batch_info.batch_index);
-        msg!("Number of blocks in batch: {}", batch_info.blocks.len());
-
-        let batch_hash = hash_nested_vector(&batch_info.blocks);
-
-        // Create BatchData to store
-        let batch_data = BatchData {
-            batch_index: batch_info.batch_index,
-            start_block_num: batch_info.start_block_num,
-            end_block_num: batch_info.end_block_num,
-            batch_hash,
-            prev_state_root: batch_info.prev_state_root,
-            post_state_root: batch_info.post_state_root,
-        };
-
-        let batch_storage = &mut ctx.accounts.batch_storage;
-
-        // Check if batch already exists and update, otherwise append
-        if let Some(existing_batch) = batch_storage
-            .batches
-            .iter_mut()
-            .find(|b| b.batch_index == batch_info.batch_index)
-        {
-            *existing_batch = batch_data;
-        } else {
-            batch_storage.batches.push(batch_data);
-        }
-
-        msg!(
-            "Batch {} committed with hash: {:?}",
-            batch_info.batch_index,
-            batch_hash
-        );
-
-        Ok(batch_hash)
+        state::commit_batch(ctx, batch_info)
     }
 
-    // Prove that the state transition of the specified batch is valid
+    /// Prove that the state transition of the specified batch is valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    /// * `batch_proof` - The batch proof to verify
+    ///
     pub fn prove_state(ctx: Context<ProveState>, batch_proof: BatchProof) -> Result<()> {
-        let storage = &ctx.accounts.batch_storage.batches;
-        let batch_index = batch_proof.batch_index;
-
-        let batch = storage
-            .iter()
-            .find(|b| b.batch_index == batch_index)
-            .ok_or(Error::from(error::ErrorCode::BatchNotExist))?;
-
-        // Calculate the commitment of publicInput
-        let pi_hash = hash_nested_vector(&vec![
-            batch.prev_state_root.to_vec(),
-            batch.post_state_root.to_vec(),
-            batch.batch_hash.to_vec(),
-        ]);
-
-        let groth16_proof = Groth16Proof {
-            proof: batch_proof.proof,
-            public_inputs: pi_hash.to_vec(),
-        };
-
-        prove_batch(groth16_proof)?;
-
-        // Update last_finalized_batch_index
-        let last_finalized = &mut ctx.accounts.last_finalized;
-        last_finalized.batch_index = batch_index;
-
-        Ok(())
+        verifier::prove_state(ctx, batch_proof)
     }
 
+    /// Get committed batch by index.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    /// * `batch_index` - The index of the batch to retrieve
+    ///
     pub fn get_committed_batch(
         ctx: Context<GetCommittedBatch>,
         batch_index: u64,
     ) -> Result<Option<BatchData>> {
-        let storage = &ctx.accounts.batch_storage.batches;
-        if let Some(batch) = storage.iter().find(|b| b.batch_index == batch_index) {
-            return Ok(Some(batch.clone()));
-        } else {
-            return Ok(None);
-        }
+        state::get_committed_batch(ctx, batch_index)
     }
 
+    /// Get the latest committed batch.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    ///
     pub fn get_latest_batch(ctx: Context<GetCommittedBatch>) -> Result<Option<BatchData>> {
-        let storage = &ctx.accounts.batch_storage.batches;
-        if let Some(batch) = storage.last() {
-            return Ok(Some(batch.clone()));
-        } else {
-            return Ok(None);
-        }
+        state::get_latest_batch(ctx)
     }
 
+    /// Get the index of the last finalized batch.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    ///
     pub fn get_last_finalized_batch_index(
         ctx: Context<GetLatestFinalizedBatchIndex>,
     ) -> Result<u64> {
-        let last_finalized = &ctx.accounts.last_finalized;
-        Ok(last_finalized.batch_index)
+        state::get_last_finalized_batch_index(ctx)
     }
-}
 
-pub fn hash_nested_vector(data: &Vec<Vec<u8>>) -> [u8; 32] {
-    if data.is_empty() {
-        return [0u8; 32];
+    /// Deposit native token (sol).
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    /// * `amount` - The amount of deposit.
+    ///
+    pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
+        bridge::deposit(ctx, amount)
     }
-    let concatenated_data = data.concat();
-    hash(&concatenated_data).to_bytes()
-}
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct BatchInfo {
-    pub batch_index: u64,
-    // Only saved in calldata
-    pub blocks: Vec<Vec<u8>>,
-    pub start_block_num: u64,
-    pub end_block_num: u64,
-    pub prev_state_root: [u8; 32],
-    pub post_state_root: [u8; 32],
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct BatchData {
-    pub batch_index: u64,
-    pub start_block_num: u64,
-    pub end_block_num: u64,
-    pub batch_hash: [u8; 32],
-    pub prev_state_root: [u8; 32],
-    pub post_state_root: [u8; 32],
-}
-
-#[account]
-pub struct BatchStorage {
-    pub authority: Pubkey,
-    pub batches: Vec<BatchData>,
-}
-
-impl Space for BatchStorage {
-    const INIT_SPACE: usize = 32 + 4 + 0; // authority + vec length + initial empty vec
-}
-
-#[account]
-pub struct LastFinalizedBatchIndex {
-    pub authority: Pubkey,
-    pub batch_index: u64,
-}
-
-impl Space for LastFinalizedBatchIndex {
-    const INIT_SPACE: usize = 32 + 8; // authority + u64
-}
-
-#[derive(Accounts)]
-pub struct Initialize<'info> {
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + BatchStorage::INIT_SPACE,
-        seeds = [b"batch_storage"],
-        bump
-    )]
-    pub batch_storage: Account<'info, BatchStorage>,
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + LastFinalizedBatchIndex::INIT_SPACE,
-        seeds = [b"last_finalized_batch_index"],
-        bump
-    )]
-    pub last_finalized: Account<'info, LastFinalizedBatchIndex>,
-    #[account(mut)]
-    pub authority: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(batch_info: BatchInfo)]
-pub struct CommitBatch<'info> {
-    #[account(
-        mut,
-        seeds = [b"batch_storage"],
-        bump,
-        has_one = authority,
-        realloc = 8 + 32 + 4 + batch_storage.batches.len().saturating_add(1).saturating_mul(120),
-        realloc::payer = authority,
-        realloc::zero = false,
-    )]
-    pub batch_storage: Account<'info, BatchStorage>,
-    #[account(mut)]
-    pub authority: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct GetCommittedBatch<'info> {
-    #[account(
-        seeds = [b"batch_storage"],
-        bump,
-    )]
-    pub batch_storage: Account<'info, BatchStorage>,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct BatchProof {
-    pub batch_index: u64,
-    pub proof: Vec<u8>,
-}
-
-#[derive(Accounts)]
-pub struct ProveState<'info> {
-    #[account(
-        seeds = [b"batch_storage"],
-        bump,
-    )]
-    pub batch_storage: Account<'info, BatchStorage>,
-    #[account(
-        seeds = [b"last_finalized_batch_index"],
-        bump,
-    )]
-    pub last_finalized: Account<'info, LastFinalizedBatchIndex>,
-}
-
-#[derive(Accounts)]
-pub struct GetLatestFinalizedBatchIndex<'info> {
-    #[account(
-        seeds = [b"last_finalized_batch_index"],
-        bump,
-    )]
-    pub last_finalized: Account<'info, LastFinalizedBatchIndex>,
+    /// Withdraw native token (sol).
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    /// * `amount` - The amount of withdrawal.
+    ///
+    pub fn withdrawal(ctx: Context<Withdrawal>, amount: u64) -> Result<()> {
+        bridge::withdrawal(ctx, amount)
+    }
 }
