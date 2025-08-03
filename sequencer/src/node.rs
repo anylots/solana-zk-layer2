@@ -112,6 +112,8 @@ impl Node {
         let state = &state_db.state;
         let state_root = state.calculate_state_root().unwrap_or_default();
         block.post_state_root = Some(state_root);
+        let withdrawal_root = state.calculate_withdrawal_root().unwrap_or_default();
+        block.withdrawal_root = Some(withdrawal_root);
 
         let txns_root = calculate_txns_root(&block.txns);
         block.txns_root = Some(txns_root);

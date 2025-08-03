@@ -1,8 +1,9 @@
 use anyhow::{anyhow, Result};
 use log::info;
 use share::{
-    state::StateDB,
+    state::{StateDB, Withdrawal},
     transaction::{parsing_instruction, Block, TransferOp},
+    WITHDRAWAL_ADDRESS,
 };
 use solana_sdk::transaction::Transaction;
 use std::{collections::HashMap, sync::Arc};
@@ -25,13 +26,33 @@ impl Executor {
         let mut pending_txns = MEMPOOL.write().await;
         let mut transfers = Vec::new();
 
+        let mut state_db = STATE.write().await;
+        let mut start_index = state_db.state.withdrawal_queue.len() as u64;
+
+        let mut withdrawals = Vec::new();
         for txn in pending_txns.iter() {
             match pre_process(txn) {
-                Ok(Some(op)) => transfers.push(op),
+                Ok(Some(op)) => {
+                    transfers.push(op.clone());
+                    if op.to == WITHDRAWAL_ADDRESS {
+                        let withdrawal = Withdrawal {
+                            from: op.from.clone(),
+                            to: op.from, // withdrawal to sender
+                            amount: op.amount as u64,
+                            index: start_index,
+                        };
+                        withdrawals.push(withdrawal);
+                        start_index += 1;
+                    }
+                }
                 _ => {}
             }
         }
-        let mut state_db = STATE.write().await;
+        state_db
+            .state
+            .withdrawal_queue
+            .extend_from_slice(&withdrawals);
+
         let balances = &mut state_db.state.balances;
         if !transfers.is_empty() {
             let _ = transfer(balances, transfers);

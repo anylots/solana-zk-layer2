@@ -81,6 +81,7 @@ pub struct Block {
     pub txns_root: Option<[u8; 32]>,
     pub prev_state_root: Option<[u8; 32]>,
     pub post_state_root: Option<[u8; 32]>,
+    pub withdrawal_root: Option<[u8; 32]>,
 }
 
 impl Block {
@@ -91,6 +92,7 @@ impl Block {
             txns_root: None,
             prev_state_root: None,
             post_state_root: None,
+            withdrawal_root: None,
         }
     }
 }

@@ -13,17 +13,30 @@ use crate::{
 
 /// Impl of initialize storage PDA.
 pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+    // Batch (blocks) PDA.
     let batch_storage = &mut ctx.accounts.batch_storage;
     batch_storage.authority = ctx.accounts.authority.key();
     batch_storage.batches = Vec::new();
 
+    // Last finalized batch index PDA.
     let last_finalized = &mut ctx.accounts.last_finalized;
     last_finalized.authority = ctx.accounts.authority.key();
     last_finalized.batch_index = 0;
 
+    // Bridge vault PDA
     let bridge_vault = &mut ctx.accounts.bridge_vault;
     bridge_vault.authority = ctx.accounts.authority.key();
     bridge_vault.balances = Vec::new();
+
+    // Withdrawal roots PDA
+    let withdrawal_roots = &mut ctx.accounts.withdrawal_roots;
+    withdrawal_roots.authority = ctx.accounts.authority.key();
+    withdrawal_roots.withdrawal_roots = Vec::new();
+
+    // Finalized withdrawals PDA
+    let withdrawals = &mut ctx.accounts.withdrawals;
+    withdrawals.authority = ctx.accounts.authority.key();
+    withdrawals.finalized_withdrawals = Vec::new();
 
     msg!("Batch storage and last_finalized batch index initialized");
     Ok(())

@@ -33,6 +33,7 @@ impl TxBatcher {
                 end_block_num: 0,
                 prev_state_root: batch.post_state_root,
                 post_state_root: [0u8; 32],
+                withdrawal_root: [0u8; 32],
             }
         } else {
             BatchInfo {
@@ -42,6 +43,7 @@ impl TxBatcher {
                 end_block_num: 0,
                 prev_state_root: [0u8; 32],
                 post_state_root: [0u8; 32],
+                withdrawal_root: [0u8; 32],
             }
         };
 
@@ -79,6 +81,12 @@ impl TxBatcher {
             .unwrap()
             .post_state_root
             .unwrap_or_default();
+        next_batch.withdrawal_root = blocks_to_submit
+            .last()
+            .unwrap()
+            .withdrawal_root
+            .unwrap_or_default();
+
         // Serialize block
         let block_data = blocks_to_submit
             .iter()

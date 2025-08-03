@@ -5359,6 +5359,7 @@ dependencies = [
  "bincode",
  "env_logger",
  "eyre",
+ "indexmap 2.10.0",
  "l2-state-client",
  "lazy_static",
  "log",
@@ -5564,6 +5565,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bincode",
+ "indexmap 2.10.0",
  "log",
  "serde",
  "serde_json",
