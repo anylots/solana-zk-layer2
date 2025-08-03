@@ -106,9 +106,9 @@ pub mod l2_state {
     /// # Arguments
     ///
     /// * `ctx` - The context of accounts
-    /// * `amount` - The amount of withdrawal.
+    /// * `withdrawal` - The data of withdrawal.
     ///
-    pub fn withdrawal(ctx: Context<Withdrawal>, amount: u64) -> Result<()> {
-        bridge::withdrawal(ctx, amount)
+    pub fn withdrawal(ctx: Context<Withdrawal>, withdrawal: WithdrawalData) -> Result<()> {
+        bridge::withdrawal(ctx, withdrawal)
     }
 }

@@ -6,6 +6,7 @@ use anchor_lang::solana_program::{entrypoint::ProgramResult, msg, program_error:
 use sp1_solana::verify_proof;
 
 use crate::biz_error;
+use crate::bridge::FinalizedWithdrawalRoots;
 use crate::state::{BatchStorage, LastFinalizedBatchIndex};
 use crate::util::hash_nested_vector;
 
@@ -36,6 +37,7 @@ pub fn prove_state(ctx: Context<ProveState>, batch_proof: BatchProof) -> Result<
     let pi_hash = hash_nested_vector(&vec![
         batch.prev_state_root.to_vec(),
         batch.post_state_root.to_vec(),
+        batch.withdrawal_root.to_vec(),
         batch.batch_hash.to_vec(),
     ]);
 
@@ -49,6 +51,10 @@ pub fn prove_state(ctx: Context<ProveState>, batch_proof: BatchProof) -> Result<
     // Update last_finalized_batch_index
     let last_finalized = &mut ctx.accounts.last_finalized;
     last_finalized.batch_index = batch_index;
+
+    // Set withdrawal_root finalized
+    let withdrawal_roots = &mut ctx.accounts.withdrawal_roots;
+    withdrawal_roots.set_finalized(batch.withdrawal_root, true);
 
     Ok(())
 }
@@ -84,6 +90,8 @@ pub struct BatchProof {
 
 #[derive(Accounts)]
 pub struct ProveState<'info> {
+    #[account(mut)]
+    pub sender: Signer<'info>,
     #[account(
         seeds = [b"batch_storage"],
         bump,
@@ -94,4 +102,14 @@ pub struct ProveState<'info> {
         bump,
     )]
     pub last_finalized: Account<'info, LastFinalizedBatchIndex>,
+    #[account(
+        seeds = [b"finalized_withdrawal_roots"],
+        bump,
+        mut,
+        realloc = 8 + 32 + 4 + withdrawal_roots.withdrawal_roots.len().saturating_add(1).saturating_mul(40),
+        realloc::payer = sender,
+        realloc::zero = false,
+    )]
+    pub withdrawal_roots: Account<'info, FinalizedWithdrawalRoots>,
+    pub system_program: Program<'info, System>,
 }

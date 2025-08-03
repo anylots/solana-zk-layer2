@@ -19,6 +19,7 @@ pub struct BatchInfo {
     pub end_block_num: u64,
     pub prev_state_root: [u8; 32],
     pub post_state_root: [u8; 32],
+    pub withdrawal_root: [u8; 32],
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -35,6 +36,7 @@ pub struct BatchData {
     pub batch_hash: [u8; 32],
     pub prev_state_root: [u8; 32],
     pub post_state_root: [u8; 32],
+    pub withdrawal_root: [u8; 32],
 }
 
 pub struct L2StateClient {
@@ -86,6 +88,22 @@ impl L2StateClient {
                         &self.program_id,
                     )
                     .0,
+                    false,
+                ),
+                AccountMeta::new(
+                    Pubkey::find_program_address(&[b"bridge_vault"], &self.program_id).0,
+                    false,
+                ),
+                AccountMeta::new(
+                    Pubkey::find_program_address(
+                        &[b"finalized_withdrawal_roots"],
+                        &self.program_id,
+                    )
+                    .0,
+                    false,
+                ),
+                AccountMeta::new(
+                    Pubkey::find_program_address(&[b"finalized_withdrawals"], &self.program_id).0,
                     false,
                 ),
                 AccountMeta::new(self.fee_payer.pubkey(), true),

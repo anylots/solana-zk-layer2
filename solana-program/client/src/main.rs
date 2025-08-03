@@ -40,6 +40,7 @@ fn main() -> Result<()> {
         end_block_num: 201,
         prev_state_root: [0u8; 32],
         post_state_root: [1u8; 32],
+        withdrawal_root: [3u8; 32],
     };
 
     let blocks_hash = hash_nested_vector(&batch_info.blocks);

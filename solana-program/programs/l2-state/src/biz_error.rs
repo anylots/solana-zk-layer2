@@ -13,4 +13,8 @@ pub enum ErrorCode {
     BatchNotExist,
     #[msg("Insufficient user balance")]
     UserBalanceInsufficent,
+    #[msg("WithdrawalRoot not finalized")]
+    WithdrawalRootNotFinalized,
+    #[msg("invalid withdrawal inclusion proof")]
+    InvalidWithdrawalInclusionProof,
 }

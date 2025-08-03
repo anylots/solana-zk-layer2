@@ -2,7 +2,10 @@
 
 use anchor_lang::prelude::*;
 
-use crate::{bridge::BridgeVault, util::hash_nested_vector};
+use crate::{
+    bridge::{BridgeVault, FinalizedWithdrawalRoots, FinalizedWithdrawals},
+    util::hash_nested_vector,
+};
 
 /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
 /*                          STATE IMPL                        */
@@ -41,6 +44,7 @@ pub fn commit_batch(ctx: Context<CommitBatch>, batch_info: BatchInfo) -> Result<
         batch_hash,
         prev_state_root: batch_info.prev_state_root,
         post_state_root: batch_info.post_state_root,
+        withdrawal_root: batch_info.withdrawal_root,
     };
 
     let batch_storage = &mut ctx.accounts.batch_storage;
@@ -103,6 +107,7 @@ pub struct BatchInfo {
     pub end_block_num: u64,
     pub prev_state_root: [u8; 32],
     pub post_state_root: [u8; 32],
+    pub withdrawal_root: [u8; 32],
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -113,6 +118,7 @@ pub struct BatchData {
     pub batch_hash: [u8; 32],
     pub prev_state_root: [u8; 32],
     pub post_state_root: [u8; 32],
+    pub withdrawal_root: [u8; 32],
 }
 
 #[account]
@@ -161,6 +167,22 @@ pub struct Initialize<'info> {
         bump
     )]
     pub bridge_vault: Account<'info, BridgeVault>,
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + BridgeVault::INIT_SPACE,
+        seeds = [b"finalized_withdrawal_roots"],
+        bump,
+    )]
+    pub withdrawal_roots: Account<'info, FinalizedWithdrawalRoots>,
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + BridgeVault::INIT_SPACE,
+        seeds = [b"finalized_withdrawals"],
+        bump,
+    )]
+    pub withdrawals: Account<'info, FinalizedWithdrawals>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
