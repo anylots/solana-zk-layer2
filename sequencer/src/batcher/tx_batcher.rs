@@ -2,7 +2,7 @@ use std::vec;
 
 use crate::node::BLOCK_DB;
 use anyhow::Result;
-use l2_state_client::{BatchInfo, L2StateClient};
+use l2_state_client::state_call::{BatchInfo, L2StateClient};
 use log::info;
 use share::transaction::{Block, BlockDB};
 

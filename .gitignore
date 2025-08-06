@@ -2,3 +2,4 @@ target
 test-ledger
 block_db
 state_db
+.env

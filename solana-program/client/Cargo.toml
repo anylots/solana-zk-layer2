@@ -7,9 +7,7 @@ edition = "2021"
 name = "l2_state_client"
 path = "src/lib.rs"
 
-[[bin]]
-name = "main"
-path = "src/main.rs"
+
 
 [dependencies]
 solana-sdk.workspace = true
@@ -18,4 +16,7 @@ anchor-lang.workspace = true
 anyhow.workspace = true
 log.workspace = true
 env_logger.workspace = true
-base64 = "0.21"
+tokio.workspace = true
+base64.workspace = true
+borsh = "1.5.7"
+anchor-client = "0.31.0"

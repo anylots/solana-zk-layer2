@@ -1,5 +1,7 @@
 use anyhow::Result;
 use share::transaction::{calculate_txns_root, Block, BlockDB};
+use share::utils::read_env_var;
+use share::{DEFAULT_L2_RPC, UNSAFE_PRIVATE_KEY};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -7,6 +9,7 @@ use tokio::time::sleep;
 
 use crate::batcher::tx_batcher::TxBatcher;
 use crate::executor::{Executor, STATE};
+use crate::oracle::l1_msg_oracle::L1MsgOracle;
 
 static BLOCK_TIME_INTERVAL: Duration = Duration::from_millis(200);
 
@@ -14,6 +17,7 @@ static BLOCK_TIME_INTERVAL: Duration = Duration::from_millis(200);
 pub struct Node {
     pub executor: Executor,
     pub batcher: Arc<TxBatcher>,
+    pub l1_msg_oracle: Arc<L1MsgOracle>,
     pub latest_block_num: u64,
     pub latest_state_root: [u8; 32],
     pub last_block_time: Arc<RwLock<Instant>>,
@@ -24,6 +28,10 @@ impl Node {
         let block_db = BLOCK_DB.read().await;
         let executor = Executor::new();
         let batcher = TxBatcher::new()?;
+        let l1_msg_oracle = L1MsgOracle::new(
+            read_env_var("L2_RPC", DEFAULT_L2_RPC.to_owned()),
+            &read_env_var("L1_ORACLE_PRIVATE_KEY", UNSAFE_PRIVATE_KEY.to_owned()),
+        )?;
 
         // Initialize block number from database or start from 0
         let latest_block_num = match block_db.db.get("latest_block_num")? {
@@ -51,6 +59,7 @@ impl Node {
         Ok(Self {
             executor,
             batcher: Arc::new(batcher),
+            l1_msg_oracle: Arc::new(l1_msg_oracle),
             latest_block_num,
             latest_state_root,
             last_block_time: Arc::new(RwLock::new(Instant::now())),
@@ -68,6 +77,13 @@ impl Node {
                 };
             }
         });
+
+        let l1_msg_oracle = self.l1_msg_oracle.clone();
+        // tokio::spawn(async move {
+        //     if let Err(e) = l1_msg_oracle.listen_deposite_event().await {
+        //         log::info!("l1_msg_oracle error: {:?}", e);
+        //     };
+        // });
 
         // Step2. Start building block
         loop {

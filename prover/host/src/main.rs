@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use l2_state_client::{BatchProof, L2StateClient};
+use l2_state_client::state_call::{BatchProof, L2StateClient};
 use share::state::StateDB;
 use share::transaction::load_blocks;
 use tokio::time::sleep;
@@ -39,6 +39,7 @@ async fn main() -> Result<()> {
             proof,
         };
 
+        // Prove batch onchain
         let _ = l2_state_client.prove_batch(batch_proof);
     }
 }

@@ -215,6 +215,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "anchor-client"
+version = "0.31.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49b3e91b12501d37c8f07de9da8c7d22067998a7760a515231187afb47ded225"
+dependencies = [
+ "anchor-lang",
+ "anyhow",
+ "futures",
+ "regex",
+ "serde",
+ "solana-account-decoder",
+ "solana-client",
+ "solana-sdk",
+ "thiserror 1.0.69",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "anchor-derive-accounts"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1845,6 +1864,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dotenv"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
+
+[[package]]
 name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3256,13 +3281,16 @@ dependencies = [
 name = "l2-state-client"
 version = "0.1.0"
 dependencies = [
+ "anchor-client",
  "anchor-lang",
  "anyhow",
  "base64 0.21.7",
+ "borsh 1.5.7",
  "env_logger",
  "log",
  "solana-client",
  "solana-sdk",
+ "tokio",
 ]
 
 [[package]]
@@ -5357,18 +5385,18 @@ dependencies = [
  "axum",
  "base64 0.21.7",
  "bincode",
+ "dotenv",
  "env_logger",
  "eyre",
- "indexmap 2.10.0",
  "l2-state-client",
  "lazy_static",
  "log",
- "rand 0.9.2",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "share",
  "sled",
+ "solana-client",
  "solana-sdk",
  "solana-transaction-status",
  "tokio",
@@ -5565,7 +5593,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bincode",
- "indexmap 2.10.0",
  "log",
  "serde",
  "serde_json",

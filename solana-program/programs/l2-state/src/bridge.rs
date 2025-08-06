@@ -7,6 +7,38 @@ use anchor_lang::solana_program::hash::hash;
 use anchor_lang::system_program;
 
 /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+/*                         EVENTS                             */
+/*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+#[event]
+pub struct DepositEvent {
+    /// The account that made the deposit
+    pub sender: Pubkey,
+    /// The amount deposited in lamports
+    pub amount: u64,
+    /// The new balance of the sender after deposit
+    pub new_balance: u64,
+    /// Timestamp of the deposit
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct WithdrawalEvent {
+    /// The account that initiated the withdrawal
+    pub sender: Pubkey,
+    /// The account that will receive the funds
+    pub to: Pubkey,
+    /// The amount withdrawn in lamports
+    pub amount: u64,
+    /// The new balance of the sender after withdrawal
+    pub new_balance: u64,
+    /// The withdrawal data hash
+    pub withdrawal_hash: [u8; 32],
+    /// Timestamp of the withdrawal
+    pub timestamp: i64,
+}
+
+/*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
 /*                         BRIDGE IMPL                        */
 /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
@@ -15,6 +47,8 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     let from = &ctx.accounts.sender;
     let bridge_vault = &mut ctx.accounts.bridge_vault;
     let program = &ctx.accounts.system_program;
+
+    // Transfer SOL from sender to bridge vault
     system_program::transfer(
         CpiContext::new(
             program.to_account_info(),
@@ -26,9 +60,26 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         amount,
     )?;
 
+    // Update balance
     let current_balance = bridge_vault.get_balance(from.key);
-    bridge_vault.set_balance(*from.key, current_balance + amount);
+    let new_balance = current_balance + amount;
+    bridge_vault.set_balance(*from.key, new_balance);
+
+    // Get current timestamp
+    let clock = Clock::get()?;
+    let timestamp = clock.unix_timestamp;
+
+    // Emit deposit event
+    emit!(DepositEvent {
+        sender: *from.key,
+        amount,
+        new_balance,
+        timestamp,
+    });
+
+    // Keep the original log message for backward compatibility
     msg!("deposit for account: {:?}, amount: {:?}", from.key, amount);
+
     Ok(())
 }
 
@@ -73,9 +124,24 @@ pub fn withdrawal(ctx: Context<Withdrawal>, withdrawal: WithdrawalData) -> Resul
     withdrawals.set_finalized(withdrawal_data_hash, true);
 
     // Account balance operations
-    bridge_vault.set_balance(*from.key, current_amount - amount);
+    let new_balance = current_amount - amount;
+    bridge_vault.set_balance(*from.key, new_balance);
     bridge_vault.sub_lamports(amount)?;
     to.add_lamports(amount)?;
+
+    // Get current timestamp
+    let clock = Clock::get()?;
+    let timestamp = clock.unix_timestamp;
+
+    // Emit withdrawal event
+    emit!(WithdrawalEvent {
+        sender: *from.key,
+        to: to.key(),
+        amount,
+        new_balance,
+        withdrawal_hash: withdrawal_data_hash,
+        timestamp,
+    });
 
     Ok(())
 }

@@ -209,7 +209,7 @@ pub struct CommitBatch<'info> {
         seeds = [b"batch_storage"],
         bump,
         has_one = authority,
-        realloc = 8 + 32 + 4 + batch_storage.batches.len().saturating_add(1).saturating_mul(120),
+        realloc = 8 + 32 + 4 + batch_storage.batches.len().saturating_add(1).saturating_mul(152),
         realloc::payer = authority,
         realloc::zero = false,
     )]

@@ -3,6 +3,7 @@ use base64::{self, engine::general_purpose, Engine};
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use share::utils::read_env_var;
 use solana_sdk::{bs58, transaction::Transaction};
 use solana_transaction_status::{Encodable, UiTransactionEncoding};
 use tower_http::cors::CorsLayer;
@@ -43,10 +44,11 @@ pub async fn start() {
     let app = Router::new()
         .route("/", post(handle_rpc_request))
         .layer(CorsLayer::permissive());
-    info!("Starting node rpc server on 0.0.0.0:8899");
+    let addr = read_env_var("SEQUENCER_ADDR", "0.0.0.0:8898".to_owned());
+    info!("Starting node rpc server on {:?}", addr);
 
     // Step2. start server
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8899").await.unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 
