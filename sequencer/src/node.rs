@@ -79,11 +79,11 @@ impl Node {
         });
 
         let l1_msg_oracle = self.l1_msg_oracle.clone();
-        // tokio::spawn(async move {
-        //     if let Err(e) = l1_msg_oracle.listen_deposite_event().await {
-        //         log::info!("l1_msg_oracle error: {:?}", e);
-        //     };
-        // });
+        tokio::spawn(async move {
+            if let Err(e) = l1_msg_oracle.listen_deposite_event().await {
+                log::info!("l1_msg_oracle error: {:?}", e);
+            };
+        });
 
         // Step2. Start building block
         loop {

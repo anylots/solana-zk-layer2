@@ -1,13 +1,12 @@
 use anyhow::Result;
-use l2_state_client::event_listen;
+use l2_state_client::event_listen::{self, EventData};
+use share::{utils::read_env_var, DEFAULT_L1_RPC, DEFAULT_L1_WS, L2_SYS_PROGRAM_ID};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     commitment_config::CommitmentConfig, instruction::Instruction, pubkey::Pubkey,
     signature::Keypair, signer::Signer, transaction::Transaction,
 };
-
-// Layer2 Sys Inbox Program ID.
-const PROGRAM_ID: &str = "My11111111111111111111111111111111111111111";
+use tokio::sync::mpsc;
 
 pub struct L1MsgOracle {
     client: RpcClient,
@@ -19,7 +18,7 @@ impl L1MsgOracle {
     pub fn new(rpc_url: String, signer_key: &str) -> Result<Self> {
         let client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::confirmed());
         let signer = Keypair::from_base58_string(signer_key);
-        let program_id = Pubkey::from_str_const(PROGRAM_ID);
+        let program_id = Pubkey::from_str_const(L2_SYS_PROGRAM_ID);
 
         Ok(Self {
             client,
@@ -29,7 +28,15 @@ impl L1MsgOracle {
     }
 
     pub async fn listen_deposite_event(&self) -> Result<()> {
-        let mut rx = event_listen::create_listener(String::from(""), String::from("")).await?;
+        let (tx, mut rx) = mpsc::unbounded_channel::<EventData>();
+        let listener_handle = tokio::spawn(async {
+            let _ = event_listen::create_listener(
+                read_env_var("L1_RPC", DEFAULT_L1_RPC.to_owned()),
+                read_env_var("L1_WS", DEFAULT_L1_WS.to_owned()),
+                tx,
+            )
+            .await;
+        });
         while let Some(event_data) = rx.recv().await {
             log::info!(
                 "Received event: {} lamports from {}",
@@ -38,10 +45,10 @@ impl L1MsgOracle {
             );
             let mut param: Vec<u8> = event_data.event.sender.to_bytes().to_vec();
             param.extend_from_slice(&event_data.event.amount.to_be_bytes());
-
             // Send deposite msg from L1 to L2;
-            self.send_to_layer2(param)?;
+            let _ = self.send_to_layer2(param);
         }
+        listener_handle.await?;
         Ok(())
     }
 

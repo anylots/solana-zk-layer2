@@ -4,7 +4,14 @@ use anyhow::{anyhow, Result};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use solana_sdk::{system_instruction::SystemInstruction, transaction::Transaction};
+use solana_sdk::{pubkey::Pubkey, system_instruction::SystemInstruction, transaction::Transaction};
+
+use crate::{L2_SYS_PROGRAM_ID, WITHDRAWAL_ADDRESS};
+
+lazy_static::lazy_static! {
+    pub static ref WITHDRAWAL_ADDRESS_KEY: Pubkey = WITHDRAWAL_ADDRESS.parse::<Pubkey>().unwrap_or_default();
+    pub static ref L2_SYS_PROGRAM_KEY: Pubkey  = L2_SYS_PROGRAM_ID.parse::<Pubkey>().unwrap_or_default();
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransferOp {
@@ -24,12 +31,19 @@ pub fn parsing_instruction(
     }
 
     let program_id = &txn.message.account_keys[program_id_index];
-
     // Only parsing system program instructions
-    if program_id == &solana_sdk::system_program::ID {
-        return parsing_sys_instruction(instruction, txn);
-    } else {
-        info!("Processing instruction for program: {}", program_id);
+    match program_id {
+        &solana_sdk::system_program::ID => return parsing_sys_instruction(instruction, txn),
+        val if val == &*WITHDRAWAL_ADDRESS_KEY => {
+            info!("Processing withdrawal instruction");
+        }
+        val if val == &*L2_SYS_PROGRAM_KEY => {
+            info!("Processing l2 system instruction");
+        }
+        _ => info!(
+            "Processing withdrawal instruction for program: {}",
+            program_id
+        ),
     }
 
     Ok(None)

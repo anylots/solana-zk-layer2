@@ -8,7 +8,6 @@ name = "l2_state_client"
 path = "src/lib.rs"
 
 
-
 [dependencies]
 solana-sdk.workspace = true
 solana-client.workspace = true
@@ -19,4 +18,4 @@ env_logger.workspace = true
 tokio.workspace = true
 base64.workspace = true
 borsh = "1.5.7"
-anchor-client = "0.31.0"
+anchor-client = { version = "0.31.0 ", features = ["async"] }

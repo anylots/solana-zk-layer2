@@ -99,16 +99,17 @@ fn transfer(balances: &mut HashMap<String, u128>, ops: Vec<TransferOp>) -> Resul
 lazy_static::lazy_static! {
     pub static ref STATE: Arc<RwLock<StateDB>> = {
         let mut state_db = StateDB::new("state_db");
-        let account = "AyUFvdbpc4xyJYW1jkCNZVQ54B3bMyqE4reiD45fK7T7";
-        if state_db.state.get_balance(account)==0{
-            // Initialize dev account with 100 SOL
-            let balance_in_lamports = 100_u128 * 1_000_000_000_u128; // 100 SOL in lamports
-            state_db.state.set_balance(account.to_string(), balance_in_lamports);// 1000000000
+        if let Ok(account)= std::env::var("DEV_ACCOUNT"){
+            if state_db.state.get_balance(&account)==0{
+                // Initialize dev account with 100 SOL
+                let balance_in_lamports = 100_u128 * 1_000_000_000_u128; // 100 SOL in lamports
+                state_db.state.set_balance(account, balance_in_lamports);// 1000000000
+            }
         }
         Arc::new(RwLock::new(state_db))
     };
 }
 
 lazy_static::lazy_static! {
-        pub static ref MEMPOOL: Arc<RwLock<Vec<Transaction>>>= Arc::new(RwLock::new(Vec::with_capacity(256)));
+    pub static ref MEMPOOL: Arc<RwLock<Vec<Transaction>>>= Arc::new(RwLock::new(Vec::with_capacity(256)));
 }
